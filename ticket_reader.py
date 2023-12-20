@@ -24,7 +24,7 @@ keycode = ""
 device = None
 is_busy = False
 
-def openDoor(timeout = 5):
+def openDoor(timeout = 1):
     global is_busy, qr_current
     qr_current = ""
     is_busy = True
@@ -58,7 +58,7 @@ def checkTicket(ticket_id):
         print("RESPONSE ["+ str(res.status_code) +"]")
         data = res.json();
         print(data)
-        if res.status_code == 200 and data.valid :
+        if res.status_code == 200 and data['valid']:
             openDoor()
         else:
             print("INVALID TICKET")
@@ -98,12 +98,11 @@ def find_device():
     print('Scanner Not Found!')
     return None
 
+GPIO.output(8, GPIO.LOW)
 # Find device...
 device = find_device()
 if device is None:
   print("Unable to find scanner")
 else:
-  #... instantiate the uploader...
-  # uploader = BarcodeUploader()
-  # ... and read the bar codes.
   readQrCode()
+  
