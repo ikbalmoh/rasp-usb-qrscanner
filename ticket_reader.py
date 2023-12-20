@@ -4,27 +4,71 @@ import threading
 import time
 from queue import *
 import datetime
+import requests
+import RPi.GPIO as GPIO
 
-device_path = "/dev/input/event3"
-current_qrcode = ""
-prev_qrcode = ""
+GPIO.setwarnings(False)
+
+GPIO.setmode(GPIO.BOARD)
+GPIO.setup(8, GPIO.OUT)
+
+# const
+DEVICE_PATH = "/dev/input/event3"
+API_URL = "http://localhost/api/ticket/"
+DEVICE_NAME = "Newtologic  4010E"
+QR_MASTER = "01HHYXPNR5HCNNKGZ5Q5EGXD8N"
+
+qr_current = ""
+qr_prev = ""
 keycode = ""
 device = None
-device_name = "Newtologic  4010E"
+is_busy = False
 
-def checkTicket(ticket):
-    global current_qrcode, prev_qrcode
-    current_qrcode = ""
-    if prev_qrcode != ticket:
-        prev_qrcode = ticket
-        print("CHECKING TICKET: " + ticket)
+def openDoor(timeout = 5):
+    global is_busy, qr_current
+    qr_current = ""
+    is_busy = True
+    print('DOOR OPEN')
+    GPIO.output(8, GPIO.HIGH)
+    time.sleep(timeout)
+    GPIO.output(8, GPIO.LOW)
+    print('DOOR CLOSED')
+    is_busy = False
+
+def checkTicket(ticket_id):
+    global qr_current, qr_prev, is_busy
+    qr_current = ""
+    if is_busy:
+        print("DOOR IS BUSY")
+        return
+    if len(ticket_id) != 26:
+        print("INVALID TICKET ID")
+        return
+    is_busy = True
+    if ticket_id == QR_MASTER:
+        openDoor()
+        return;
+    if qr_prev == ticket_id:
+        print("ON CHECKING: " + ticket_id)
     else:
-        print("STILL CHECKING")
+        qr_prev = ticket_id
+        url = API_URL + ticket_id
+        print("CHECKING TICKET: " + url)
+        res = requests.post(url)
+        print("RESPONSE ["+ str(res.status_code) +"]")
+        data = res.json();
+        print(data)
+        if res.status_code == 200 and data.valid :
+            openDoor()
+        else:
+            print("INVALID TICKET")
+        qr_prev = ""
+        is_busy = False
 
 
 # Reads barcode from "device"
 def readQrCode():
-    global current_qrcode, keycode, prev_qrcode
+    global qr_current, keycode, qr_prev, is_busy
     
     print ("Waiting QR code...")
     
@@ -32,11 +76,14 @@ def readQrCode():
         if event.type == evdev.ecodes.EV_KEY and event.value == 1:
             keycode = categorize(event).keycode
             if keycode == 'KEY_ENTER':
-                # uploader.register(current_qrcode)
-                print('QR CODE READED: ' + current_qrcode)
-                checkTicket(current_qrcode)
+                # uploader.register(qr_current)
+                print('QR CODE READED: ' + qr_current)
+                if is_busy:
+                    qr_current = ""
+                else:
+                    checkTicket(qr_current)
             else:
-                current_qrcode += keycode[4:]
+                qr_current += keycode[4:]
             
 
 def find_device():
@@ -45,14 +92,14 @@ def find_device():
     
     for d in devices:
         print(d.path, d.name, d.phys)
-        if d.name == device_name:
-            print('Scanner Found')
+        if d.name == DEVICE_NAME:
+            print('Scanner Found: ' + d.path)
             return d
-        print('Scanner Not Found!')
+    print('Scanner Not Found!')
     return None
 
 # Find device...
-device = InputDevice('/dev/input/event3')
+device = find_device()
 if device is None:
   print("Unable to find scanner")
 else:
