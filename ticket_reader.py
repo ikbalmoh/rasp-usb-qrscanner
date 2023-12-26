@@ -29,9 +29,9 @@ def openDoor(timeout = 1):
     qr_current = ""
     is_busy = True
     print('DOOR OPEN')
-    GPIO.output(8, GPIO.HIGH)
-    time.sleep(timeout)
     GPIO.output(8, GPIO.LOW)
+    time.sleep(timeout)
+    GPIO.output(8, GPIO.HIGH)
     print('DOOR CLOSED')
     is_busy = False
 
@@ -98,7 +98,7 @@ def find_device():
     print('Scanner Not Found!')
     return None
 
-GPIO.output(8, GPIO.LOW)
+GPIO.output(8, GPIO.HIGH)
 # Find device...
 device = find_device()
 if device is None:
